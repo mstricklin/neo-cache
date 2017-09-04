@@ -1,4 +1,4 @@
-package edu.utexas.arlut.ciads;
+package edu.utexas.arlut.ciads.cacheGraph;
 
 import com.tinkerpop.blueprints.*;
 import lombok.extern.slf4j.Slf4j;
@@ -66,6 +66,8 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             public void run() {
                 proxy.getBase().setProperty(key, val);
                 writeTo.commit();
+                log.info("Executor setProperty {} {}", key, val);
+
             }
         });
     }

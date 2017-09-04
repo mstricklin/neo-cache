@@ -1,14 +1,17 @@
-package edu.utexas.arlut.ciads;
+package edu.utexas.arlut.ciads.cacheGraph;
 
 import com.tinkerpop.blueprints.Element;
 import com.tinkerpop.blueprints.util.wrappers.id.IdGraph;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Set;
 
 import static com.google.common.collect.Maps.newHashMap;
+import static com.google.common.collect.Maps.newLinkedHashMap;
 import static com.tinkerpop.blueprints.util.ElementHelper.getProperties;
 
+@Slf4j
 public abstract class CacheElement implements Element {
 
     // b/c we're write-behind, this may be slow in coming...

@@ -1,4 +1,4 @@
-package edu.utexas.arlut.ciads;
+package edu.utexas.arlut.ciads.cacheGraph;
 
 import com.google.common.collect.*;
 import com.tinkerpop.blueprints.Direction;
@@ -18,6 +18,7 @@ public class CacheVertex extends CacheElement implements Vertex {
     CacheVertex(String id, CacheGraph cg) {
         super(id, cg);
     }
+
     CacheVertex(Vertex from, CacheGraph cg) {
         super(from, cg);
     }
@@ -61,6 +62,20 @@ public class CacheVertex extends CacheElement implements Vertex {
 
     public void addInEdge(CacheEdge ce) {
         inEdges.add(ce);
+    }
+
+
+    @Override
+    public void setProperty(String key, Object value) {
+        super.setProperty(key, value);
+        graph.addToIndex(key, value, this);
+    }
+
+    @Override
+    public <T> T removeProperty(String key) {
+        Object value = getProperty(key);
+        graph.removeFromIndex(key, value, this);
+        return super.removeProperty(key);
     }
 
     @Override
