@@ -4,6 +4,8 @@ package edu.utexas.arlut.ciads;
 import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.impls.neo4j.Neo4jGraph;
 import edu.utexas.arlut.ciads.cacheGraph.CachedGraph;
+import edu.utexas.arlut.ciads.cpiGraph.CPIGraph;
+import edu.utexas.arlut.ciads.cpiGraph.CPIGraphFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
@@ -20,12 +22,14 @@ public class App {
         log.info("Neo contents");
         dumpGraph(n4jg);
 
-        CachedGraph<Neo4jGraph> cg = new CachedGraph<>(n4jg);
+        CPIGraphFactory cpiFactory = new CPIGraphFactory(n4jg);
+        CPIGraph cg = cpiFactory.get("aaa");
         log.info("Graph {}", cg);
 
         cg.createKeyIndex("foo", Vertex.class);
         Vertex v0 = cg.addVertex(null);
         v0.setProperty("foo", "v0");
+
         Vertex v1 = cg.addVertex(null);
         v1.setProperty("foo", "v1");
 
@@ -34,27 +38,28 @@ public class App {
 
         log.info("Cache contents");
         dumpGraph(cg);
+        log.info("rollback contents");
 
-        Thread.sleep(500);
-        log.info("");
-        log.info("Neo contents");
-        dumpGraph(n4jg);
+        cg.rollback();
+        dumpGraph(cg);
+
+        v0 = cg.addVertex(null);
+        v0.setProperty("foo", "v0");
+        log.info("commit contents");
+
+        cg.commit();
+        dumpGraph(cg);
+
+
+
+//        Thread.sleep(500);
+//        log.info("");
+//        log.info("Neo contents");
+//        dumpGraph(n4jg);
 
         cg.shutdown();
 
-        Map<String, String> a = newHashMap();
-        a.put("a", "aaa0");
-        a.put("b", "bbb0");
-
-        Map<String, String> b = newHashMap();
-        b.put("a", "aaa1");
-        b.put("c", "ccc1");
-        for (Map.Entry<String, String> me: a.entrySet())
-            log.info("a: {}", me);
-        log.info("");
-        a.putAll(b);
-        for (Map.Entry<String, String> me: a.entrySet())
-            log.info("a: {}", me);
+        n4jg.shutdown();
 
     }
 
@@ -62,7 +67,7 @@ public class App {
         for (Map.Entry<String, Object> me: getProperties(e).entrySet())
             log.info("\t{} => {}", me.getKey(), me.getValue());
     }
-    private static void dumpGraph(Graph g) {
+    public static void dumpGraph(Graph g) {
         for (Vertex v: g.getVertices()) {
             log.info("v: {}", v);
             dumpProperties(v);

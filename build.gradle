@@ -1,6 +1,15 @@
 apply plugin: 'java'
 apply plugin: 'maven'
 
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+ext {
+    assertjVersion = "2.1.0"
+    blueprintsVersion = "2.4.0"
+}
+
 // In this section you declare where to find the dependencies of your project
 repositories {
     mavenLocal()
@@ -17,4 +26,6 @@ dependencies {
     compile 'com.tinkerpop.blueprints:blueprints-neo4j-graph:2.4.0'
 
     testCompile 'junit:junit:4.12'
+    testCompile "com.tinkerpop.blueprints:blueprints-test:${blueprintsVersion}"
+
 }

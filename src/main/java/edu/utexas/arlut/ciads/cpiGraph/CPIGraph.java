@@ -1,125 +1,243 @@
-package edu.utexas.arlut.ciads.cpiGraph;
+package edu.utexas.arlut.amt.graph.impl.cpiGraph;
 
-import com.google.common.base.Function;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.collect.FluentIterable;
-import com.tinkerpop.blueprints.*;
-
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.in;
 import static com.google.common.base.Predicates.not;
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.Sets.newHashSet;
+import static com.tinkerpop.blueprints.util.ExceptionFactory.edgeLabelCanNotBeNull;
 
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.FluentIterable;
+import com.tinkerpop.blueprints.*;
+import com.tinkerpop.blueprints.util.DefaultGraphQuery;
+import com.tinkerpop.blueprints.util.PropertyFilteredIterable;
+import com.tinkerpop.blueprints.util.StringFactory;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
     CPIGraph(String graphId, CPIGraphFactory factory) {
-
+        log.info("Start CPIGraph w/ id {}", graphId);
         this.graphId = graphId;
         this.factory = factory;
     }
 
-    @Override
-    public Features getFeatures() {
-        return null;
+    private static final Features FEATURES = new Features();
+
+    static {
+        // TODO: revisit this...
+        FEATURES.supportsSerializableObjectProperty = true; // TODO will this survive serialization?
+        FEATURES.supportsBooleanProperty = true;
+        FEATURES.supportsDoubleProperty = true;
+        FEATURES.supportsFloatProperty = true;
+        FEATURES.supportsIntegerProperty = true;
+        FEATURES.supportsPrimitiveArrayProperty = true;
+        FEATURES.supportsUniformListProperty = true;
+        FEATURES.supportsMixedListProperty = true; // TODO will this survive serialization?
+        FEATURES.supportsLongProperty = true;
+        FEATURES.supportsMapProperty = true; // TODO will this survive serialization?
+        FEATURES.supportsStringProperty = true;
+
+        FEATURES.supportsDuplicateEdges = true;
+        FEATURES.supportsSelfLoops = true;
+        FEATURES.isPersistent = false; //true; // TODO
+        FEATURES.isWrapper = false;
+        FEATURES.supportsVertexIteration = true;
+        FEATURES.supportsEdgeIteration = true;
+        FEATURES.supportsVertexIndex = true;
+        FEATURES.supportsEdgeIndex = true;
+        FEATURES.ignoresSuppliedIds = true;
+        FEATURES.supportsTransactions = true;
+        FEATURES.supportsIndices = true;
+        FEATURES.supportsKeyIndices = true;
+        FEATURES.supportsVertexKeyIndex = true;
+        FEATURES.supportsEdgeKeyIndex = true;
+        FEATURES.supportsEdgeRetrieval = true;
+        FEATURES.supportsVertexProperties = true;
+        FEATURES.supportsEdgeProperties = true;
+        FEATURES.supportsThreadedTransactions = false;
     }
 
+
+    @Override
+    public Features getFeatures() {
+        return FEATURES;
+    }
+    // =================================
+    public static IllegalArgumentException deletedElementException(String id) {
+        return new IllegalArgumentException("Element "+id+" has been deleted");
+    }
+    // =================================
+    // TODO: consider merging vertex and edge caches, since their IDs likely (?) won't collide
+    CPIVertexProxy.CPIVertex vertexImpl(String id) {
+        if (deletedVertices.contains(id))
+            throw deletedElementException(id);
+        return mutatedVertices.containsKey(id) ? mutatedVertices.get(id)
+                                               : vertexCache.getIfPresent(id);
+        // TODO: exception on not present...
+    }
+    CPIVertexProxy.CPIVertex mutableVertexImpl(String id) {
+        if (deletedVertices.contains(id))
+            throw deletedElementException(id);
+        if (mutatedVertices.containsKey(id)) {
+            return mutatedVertices.get(id);
+        }
+        CPIVertexProxy.CPIVertex v = new CPIVertexProxy.CPIVertex(vertexCache.getIfPresent(id));
+        mutatedVertices.put(id, v);
+        return v;
+        // TODO: exception on not present...
+    }
+    CPIEdgeProxy.CPIEdge edgeImpl(String id) {
+        if (deletedEdges.contains(id))
+            throw deletedElementException(id);
+        return mutatedEdges.containsKey(id) ? mutatedEdges.get(id)
+                                            : edgeCache.getIfPresent(id);
+        // TODO: exception on not present...
+    }
+    CPIEdgeProxy.CPIEdge mutableEdgeImpl(String id) {
+        if (deletedEdges.contains(id))
+            throw deletedElementException(id);
+        if (mutatedEdges.containsKey(id)) {
+            return mutatedEdges.get(id);
+        }
+        CPIEdgeProxy.CPIEdge e = new CPIEdgeProxy.CPIEdge(edgeCache.getIfPresent(id));
+        mutatedEdges.put(id, e);
+        return e;
+        // TODO: exception on not present...
+    }
+    // =================================
     @Override
     public Vertex addVertex(Object id_) {
-        String id = factory.vertexId();
-        CPIVertex.Impl impl = new CPIVertex.Impl(id);
+        String id = null == id_ ? factory.vertexId() : id_.toString();
+        CPIVertexProxy.CPIVertex impl = new CPIVertexProxy.CPIVertex(id);
         mutatedVertices.put(id, impl);
         // TODO: write-behind action add vertex
         // TODO: write-behind action setProperty ID
-        return new CPIVertex(id, this);
+        return new CPIVertexProxy(id, this);
     }
 
     @Override
     public Vertex getVertex(Object id) {
+        if (null == id)
+            throw com.tinkerpop.blueprints.util.ExceptionFactory.vertexIdCanNotBeNull();
         if (deletedVertices.contains(id))
             return null;
         if (mutatedVertices.containsKey(id.toString())
                 || (null != vertexCache.getIfPresent(id.toString())))
-            return new CPIVertex(id.toString(), this);
+            return new CPIVertexProxy(id.toString(), this);
         return null;
     }
 
     @Override
     public void removeVertex(Vertex vertex) {
         String id = vertex.getId().toString();
+        checkNotNull(vertex);
+        for (Edge e : vertex.getEdges(Direction.BOTH))
+            removeEdge(e);
+
         mutatedVertices.remove(id);
         deletedVertices.add(id);
         // TODO: write-behind action remove vertex
     }
 
 
-
     @Override
     public Iterable<Vertex> getVertices() {
         return FluentIterable.from(vertexCache.asMap().keySet())
-                .append(mutatedVertices.keySet())
-                .filter(not(in(deletedVertices)))
-                .transform(CPIVertex.MAKE(this))
-                .transform(CPIVertex.DOWNCAST);
+                             .append(mutatedVertices.keySet())
+                             .filter(not(in(deletedVertices)))
+                             .transform(CPIVertexProxy.MAKE(this))
+                             .transform(CPIVertexProxy.DOWNCAST)
+                             .toList();
     }
 
     @Override
     public Iterable<Vertex> getVertices(String key, Object value) {
-        return null;
+        // TODO: keyIndices
+        return new PropertyFilteredIterable<>(key, value, this.getVertices());
     }
 
     @Override
     public Edge addEdge(Object id_, Vertex outVertex, Vertex inVertex, String label) {
         // TODO: assert non-null & cast-ability
-        String id = factory.edgeId();
-        CPIEdge.Impl impl = new CPIEdge.Impl(id, outVertex.getId().toString(), inVertex.getId().toString(), label);
+        if (label == null)
+            throw edgeLabelCanNotBeNull();
+        String id = null == id_ ? factory.edgeId() : id_.toString();
+        CPIEdgeProxy.CPIEdge impl = new CPIEdgeProxy.CPIEdge(id, outVertex.getId().toString(), inVertex.getId().toString(), label);
         mutatedEdges.put(id, impl);
+        ((CPIVertexProxy)outVertex).addOutEdge(id);
+        ((CPIVertexProxy)inVertex).addInEdge(id);
         // TODO: write-behind action add edge
         // TODO: write-behind action setProperty ID
-        return new CPIEdge(id, this);
+        return new CPIEdgeProxy(id, this);
     }
 
     @Override
     public Edge getEdge(Object id) {
+        if (null == id)
+            throw com.tinkerpop.blueprints.util.ExceptionFactory.edgeIdCanNotBeNull();
         if (deletedEdges.contains(id))
             return null;
         if (mutatedEdges.containsKey(id.toString())
                 || (null != edgeCache.getIfPresent(id.toString())))
-            return new CPIEdge(id.toString(), this);
+            return new CPIEdgeProxy(id.toString(), this);
         return null;
     }
 
     @Override
     public void removeEdge(Edge edge) {
-        String id = edge.getId().toString();
-        mutatedEdges.remove(id);
-        deletedEdges.add(id);
+        checkNotNull(edge);
+
+        CPIEdgeProxy ep = (CPIEdgeProxy) edge;
+
+        CPIVertexProxy vOut = ep.outVertex();
+        vOut.removeEdge(ep.rawId());
+
+        CPIVertexProxy vIn = ep.inVertex();
+        vIn.removeEdge(ep.rawId());
+
+
+        mutatedEdges.remove(ep.rawId());
+        deletedEdges.add(ep.rawId());
         // TODO: write-behind action remove edge
     }
 
     @Override
     public Iterable<Edge> getEdges() {
         return FluentIterable.from(edgeCache.asMap().keySet())
-                .append(mutatedEdges.keySet())
-                .filter(not(in(deletedEdges)))
-                .transform(CPIEdge.MAKE(this))
-                .transform(CPIEdge.DOWNCAST);
+                             .append(mutatedEdges.keySet())
+                             .filter(not(in(deletedEdges)))
+                             .transform(CPIEdgeProxy.MAKE(this))
+                             .transform(CPIEdgeProxy.DOWNCAST)
+                             .toList();
     }
 
     @Override
     public Iterable<Edge> getEdges(String key, Object value) {
-        return null;
+        // TODO: keyIndices
+        return new PropertyFilteredIterable<>(key, value, this.getEdges());
     }
 
-    // =======================================
+    // =================================
+    @Override
+    public String toString() {
+        return StringFactory.graphString(this, graphId);
+    }
+    @Override
+    public int hashCode() {
+        return graphId.hashCode();
+    }
+    // =================================
     @Override
     @Deprecated
     public void stopTransaction(Conclusion conclusion) {
-
     }
 
     private void reset() {
@@ -170,32 +288,34 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
     @Override
     public <T extends Element> Set<String> getIndexedKeys(Class<T> elementClass) {
-        return null;
+        return Collections.emptySet();
     }
 
     // =======================================
     @Override
     public GraphQuery query() {
-        return null;
+        return new DefaultGraphQuery(this);
     }
 
     @Override
     public void shutdown() {
         // TODO: how to coördinate?
+        // 1. flush all write-behind
+        // 2. tell factory to remove us
     }
 
     // =======================================
     private final String graphId;
     private final CPIGraphFactory factory;
-    final Cache<String, CPIVertex.Impl> vertexCache = CacheBuilder.newBuilder()
-            .maximumSize(1000)
-            .build();
-    final Cache<String, CPIEdge.Impl> edgeCache = CacheBuilder.newBuilder()
-            .maximumSize(1000)
-            .build();
+    final Cache<String, CPIVertexProxy.CPIVertex> vertexCache = CacheBuilder.newBuilder()
+                                                                            .maximumSize(1000)
+                                                                            .build();
+    final Cache<String, CPIEdgeProxy.CPIEdge> edgeCache = CacheBuilder.newBuilder()
+                                                                      .maximumSize(1000)
+                                                                      .build();
 
-    Map<String, CPIVertex.Impl> mutatedVertices = newHashMap();
+    Map<String, CPIVertexProxy.CPIVertex> mutatedVertices = newHashMap();
     Set<String> deletedVertices = newHashSet();
-    Map<String, CPIEdge.Impl> mutatedEdges = newHashMap();
+    Map<String, CPIEdgeProxy.CPIEdge> mutatedEdges = newHashMap();
     Set<String> deletedEdges = newHashSet();
 }

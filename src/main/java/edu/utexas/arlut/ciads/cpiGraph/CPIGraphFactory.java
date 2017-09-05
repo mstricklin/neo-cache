@@ -1,18 +1,18 @@
-package edu.utexas.arlut.ciads.cpiGraph;
+package edu.utexas.arlut.amt.graph.impl.cpiGraph;
 
 
 import com.tinkerpop.blueprints.TransactionalGraph;
-import edu.utexas.arlut.ciads.cacheGraph.IdFactory;
 import lombok.Setter;
 
 public class CPIGraphFactory {
-    public static final String ID = "__id";
 
-    CPIGraphFactory(TransactionalGraph writeThrough) {
+    public CPIGraphFactory(TransactionalGraph writeThrough) {
         this.writeThrough = writeThrough;
+        vertexIdFactory = new IdFactory.DefaultIdFactory();
+        edgeIdFactory = new IdFactory.DefaultIdFactory();
     }
-    CPIGraph get(String graphId) {
-        return null;
+    public CPIGraph get(String graphId) {
+        return new CPIGraph(graphId, this);
     }
     // =======================================
     String vertexId() {
