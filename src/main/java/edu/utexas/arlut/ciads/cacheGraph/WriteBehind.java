@@ -5,17 +5,17 @@ import com.tinkerpop.blueprints.Element;
 public abstract class WriteBehind {
     void shutdown() {}
 
-    void addVertex(final CacheVertex proxy) {}
+    void addVertex(final CachedVertex proxy) {}
 
-    void removeVertex(final CacheVertex proxy) {}
+    void removeVertex(final CachedVertex proxy) {}
 
-    void addEdge(final CacheEdge proxy) {}
+    void addEdge(final CachedEdge proxy) {}
 
-    void removeEdge(final CacheEdge proxy) {}
+    void removeEdge(final CachedEdge proxy) {}
 
-    void setProperty(final CacheElement proxy, final String key, final Object val) {}
+    void setProperty(final CachedElement proxy, final String key, final Object val) {}
 
-    void removeProperty(final CacheElement proxy, final String key) {}
+    void removeProperty(final CachedElement proxy, final String key) {}
 
     void addKeyIndex(final String key, Class<? extends Element> clazz) {}
 
