@@ -16,19 +16,19 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
         executor.shutdown();
     }
 
-    void addVertex(final CacheVertex proxy) {
+    void addVertex(final CachedVertex proxy) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
                 Vertex v = writeTo.addVertex(null);
                 proxy.setBase(v);
-                v.setProperty(CacheGraph.ID, proxy.getId());
+                v.setProperty(CachedGraph.ID, proxy.getId());
                 writeTo.commit();
                 log.info("Executor addVertex {}", v);
             }
         });
     }
-    void removeVertex(final CacheVertex proxy) {
+    void removeVertex(final CachedVertex proxy) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -37,7 +37,7 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             }
         });
     }
-    void addEdge(final CacheEdge proxy) {
+    void addEdge(final CachedEdge proxy) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -45,13 +45,13 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
                 Vertex iV = proxy.endVertex.getBaseVertex();
                 Edge e = writeTo.addEdge(null, oV, iV, proxy.label);
                 proxy.setBase(e);
-                e.setProperty(CacheGraph.ID, proxy.getId());
+                e.setProperty(CachedGraph.ID, proxy.getId());
                 writeTo.commit();
                 log.info("Executor addEdge {}", e);
             }
         });
     }
-    void removeEdge(final CacheEdge proxy) {
+    void removeEdge(final CachedEdge proxy) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -60,7 +60,7 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             }
         });
     }
-    void setProperty(final CacheElement proxy, final String key, final Object val) {
+    void setProperty(final CachedElement proxy, final String key, final Object val) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -71,7 +71,7 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             }
         });
     }
-    void removeProperty(final CacheElement proxy, final String key) {
+    void removeProperty(final CachedElement proxy, final String key) {
         executor.submit(new Runnable() {
             @Override
             public void run() {

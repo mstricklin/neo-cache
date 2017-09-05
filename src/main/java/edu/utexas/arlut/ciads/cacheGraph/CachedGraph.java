@@ -12,21 +12,22 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.Callable;
 
 import static com.google.common.collect.Maps.newHashMap;
 
+// CPI =
+// Cached
+// Partitioned
+// IDed
 @Slf4j
-public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
+public class CachedGraph<T extends TransactionalGraph & KeyIndexableGraph>
         implements TransactionalGraph, KeyIndexableGraph {
-
     public static final String ID = "__id";
     private final T graph;
-    final Cache<String, CacheVertex> vertexCache = CacheBuilder.newBuilder()
+    final Cache<String, CachedVertex> vertexCache = CacheBuilder.newBuilder()
             .maximumSize(1000)
             .build();
-    final Cache<String, CacheEdge> edgeCache = CacheBuilder.newBuilder()
+    final Cache<String, CachedEdge> edgeCache = CacheBuilder.newBuilder()
             .maximumSize(1000)
             .build();
 
@@ -41,10 +42,10 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
     WriteBehind writeBehind = new NullWriteBehind();
 
 
-    CacheGraph(T graph) {
+    public CachedGraph(T graph) {
         this.graph = graph;
-        vertexIdFactory = new DefaultIdFactory();
-        edgeIdFactory = new DefaultIdFactory();
+        vertexIdFactory = new IdFactory.DefaultIdFactory();
+        edgeIdFactory = new IdFactory.DefaultIdFactory();
 
         createKeyIndex(ID, Vertex.class);
         createKeyIndex(ID, Edge.class);
@@ -66,6 +67,15 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
             _addEdge(e);
     }
 
+    public void dump() {
+        log.info("= baseline =");
+        for (Map.Entry<String, CachedVertex> me : vertexCache.asMap().entrySet())
+            log.info("\t{} => {}", me.getKey(), me.getValue());
+        for (Map.Entry<String, CachedEdge> me : edgeCache.asMap().entrySet())
+            log.info("\t{} => {}", me.getKey(), me.getValue());
+        getTx().dump();
+    }
+
     @Override
     public Features getFeatures() {
         return graph.getFeatures();
@@ -73,15 +83,11 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
 
     @Override
     public Vertex addVertex(Object id_) {
-        String id = vertexIdFactory.call();
-        final CacheVertex cv = new CacheVertex(id, this);
-        vertexCache.put(id, cv);
-        writeBehind.addVertex(cv);
-        return cv;
+        return getTx().addVertex(null);
     }
 
     private void _addVertex(Vertex v) {
-        final CacheVertex cv = new CacheVertex(v, this);
+        final CachedVertex cv = new CachedVertex(v, this);
         String id = cv.getId().toString();
         vertexCache.put(id, cv);
     }
@@ -99,7 +105,7 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
             removeEdge(e);
         }
         vertexCache.invalidate(id);
-        writeBehind.removeVertex((CacheVertex) v);
+        writeBehind.removeVertex((CachedVertex) v);
     }
 
     @Override
@@ -117,10 +123,10 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
     @Override
     public Edge addEdge(Object id_, Vertex outVertex, Vertex inVertex, String label) {
         String id = edgeIdFactory.call();
-        CacheVertex oV = (CacheVertex) outVertex;
-        CacheVertex iV = (CacheVertex) inVertex;
+        CachedVertex oV = (CachedVertex) outVertex;
+        CachedVertex iV = (CachedVertex) inVertex;
 
-        final CacheEdge ce = new CacheEdge(id, oV, iV, label, this);
+        final CachedEdge ce = new CachedEdge(id, oV, iV, label, this);
         oV.addOutEdge(ce);
         iV.addInEdge(ce);
 
@@ -129,16 +135,16 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
         return ce;
     }
 
-    private CacheVertex resolve(Edge e, Direction d) {
+    private CachedVertex resolve(Edge e, Direction d) {
         Vertex ov = e.getVertex(d);
         String ovid = ov.getProperty(ID).toString();
         return vertexCache.getIfPresent(ovid);
     }
 
     private void _addEdge(Edge e) {
-        CacheVertex oV = resolve(e, Direction.OUT);
-        CacheVertex iV = resolve(e, Direction.IN);
-        final CacheEdge ce = new CacheEdge(e, oV, iV, this);
+        CachedVertex oV = resolve(e, Direction.OUT);
+        CachedVertex iV = resolve(e, Direction.IN);
+        final CachedEdge ce = new CachedEdge(e, oV, iV, this);
         String id = ce.getId().toString();
         edgeCache.put(id, ce);
     }
@@ -152,7 +158,7 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
     public void removeEdge(Edge e) {
         String id = e.getProperty(ID);
         edgeCache.invalidate(id);
-        writeBehind.removeEdge((CacheEdge) e);
+        writeBehind.removeEdge((CachedEdge) e);
     }
 
     @Override
@@ -180,14 +186,19 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
 
     @Override
     public void shutdown() {
-        log.info("CacheGraph shutdown");
+        log.info("CachedGraph shutdown");
         writeBehind.shutdown();
         graph.shutdown();
     }
 
     @Override
     public void commit() {
-
+    /*
+    o remove edges
+    o remove vertices
+    o add vertices
+    o add edges
+     */
     }
 
     @Override
@@ -224,14 +235,14 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
     public <T extends Element> void createKeyIndex(String key, Class<T> elementClass, Parameter... indexParameters) {
         if (Vertex.class.isAssignableFrom(elementClass)) {
             if (!isIndexed(key, elementClass)) {
-                Multimap<Object, CacheVertex> mm = LinkedHashMultimap.create();
+                Multimap<Object, CachedVertex> mm = LinkedHashMultimap.create();
                 mm = Multimaps.synchronizedMultimap(mm);
                 vertexIndex.put(key, mm);
                 writeBehind.addKeyIndex(key, elementClass);
             }
         } else if (Edge.class.isAssignableFrom(elementClass)) {
             if (!isIndexed(key, elementClass)) {
-                Multimap<Object, CacheEdge> mm = LinkedHashMultimap.create();
+                Multimap<Object, CachedEdge> mm = LinkedHashMultimap.create();
                 mm = Multimaps.synchronizedMultimap(mm);
                 edgeIndex.put(key, mm);
                 writeBehind.addKeyIndex(key, elementClass);
@@ -252,55 +263,60 @@ public class CacheGraph<T extends TransactionalGraph & KeyIndexableGraph>
     }
 
     // =================================
-    public interface IdFactory extends Callable<String> {
-        String call();
-    }
-
-    private static class DefaultIdFactory implements IdFactory {
-        @Override
-        public String call() {
-            return UUID.randomUUID().toString();
-        }
-    }
-
-    void addToIndex(String key, Object value, CacheVertex vertex) {
+    void addToIndex(String key, Object value, CachedVertex vertex) {
         if (vertexIndex.containsKey(key)) {
             log.info("Add to index {}:{}:{}", key, value, vertex);
             vertexIndex.get(key).put(value, vertex);
         }
     }
-    void removeFromIndex(String key, Object value, CacheVertex edge) {
+
+    void removeFromIndex(String key, Object value, CachedVertex edge) {
         if (vertexIndex.containsKey(key))
             vertexIndex.get(key).remove(value, edge);
     }
 
-    void addToIndex(String key, Object value, CacheEdge edge) {
+    void addToIndex(String key, Object value, CachedEdge edge) {
         if (edgeIndex.containsKey(key)) {
             log.info("Add to index {}:{}:{}", key, value, edge);
             edgeIndex.get(key).put(value, edge);
         }
     }
-    void removeFromIndex(String key, Object value, CacheEdge edge) {
+
+    void removeFromIndex(String key, Object value, CachedEdge edge) {
         if (edgeIndex.containsKey(key))
             edgeIndex.get(key).remove(value, edge);
     }
 
     <T extends Element> void addToIndex(String key, Object value, T e) {
-        if ((e instanceof CacheVertex) && (vertexIndex.containsKey(key))) {
-            vertexIndex.get(key).put(value, (CacheVertex) e);
-        } else if ((e instanceof CacheEdge) && (edgeIndex.containsKey(key))) {
-            edgeIndex.get(key).put(value, (CacheEdge) e);
+        if ((e instanceof CachedVertex) && (vertexIndex.containsKey(key))) {
+            vertexIndex.get(key).put(value, (CachedVertex) e);
+        } else if ((e instanceof CachedEdge) && (edgeIndex.containsKey(key))) {
+            edgeIndex.get(key).put(value, (CachedEdge) e);
         }
     }
 
+    // =======================================
+    String vertexId() {
+        return vertexIdFactory.call();
+    }
+
+    String edgeId() {
+        return edgeIdFactory.call();
+    }
+
+    // =======================================
     // [vertex|edge]:key:value:Set<Element>
-    Map<String, Multimap<Object, CacheVertex>> vertexIndex = newHashMap();
-    Map<String, Multimap<Object, CacheEdge>> edgeIndex = newHashMap();
+    Map<String, Multimap<Object, CachedVertex>> vertexIndex = newHashMap();
+    Map<String, Multimap<Object, CachedEdge>> edgeIndex = newHashMap();
+
+    private GraphTransaction getTx() {
+        return tlGraphTransaction.get();
+    }
 
     private ThreadLocal<GraphTransaction> tlGraphTransaction = new ThreadLocal<GraphTransaction>() {
         @Override
         protected GraphTransaction initialValue() {
-            return new GraphTransaction(CacheGraph.this);
+            return new GraphTransaction(CachedGraph.this);
         }
     };
 }

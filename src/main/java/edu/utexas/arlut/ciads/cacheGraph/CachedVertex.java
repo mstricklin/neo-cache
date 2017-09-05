@@ -13,13 +13,13 @@ import java.util.Set;
 
 import static com.google.common.collect.Sets.newHashSet;
 
-public class CacheVertex extends CacheElement implements Vertex {
+public class CachedVertex extends CachedElement implements Vertex {
 
-    CacheVertex(String id, CacheGraph cg) {
+    CachedVertex(String id, CachedGraph cg) {
         super(id, cg);
     }
 
-    CacheVertex(Vertex from, CacheGraph cg) {
+    CachedVertex(Vertex from, CachedGraph cg) {
         super(from, cg);
     }
 
@@ -56,11 +56,11 @@ public class CacheVertex extends CacheElement implements Vertex {
         return graph.addEdge(null, this, inVertex, label);
     }
 
-    public void addOutEdge(CacheEdge ce) {
+    public void addOutEdge(CachedEdge ce) {
         outEdges.add(ce);
     }
 
-    public void addInEdge(CacheEdge ce) {
+    public void addInEdge(CachedEdge ce) {
         inEdges.add(ce);
     }
 
@@ -87,6 +87,24 @@ public class CacheVertex extends CacheElement implements Vertex {
         return StringFactory.vertexString(this);
     }
 
-    private Set<CacheEdge> outEdges = newHashSet();
-    private Set<CacheEdge> inEdges = newHashSet();
+    static class Impl extends CachedElement.Impl {
+        Impl copy() {
+            return new Impl(this);
+        }
+        Impl() {
+            super();
+            outEdges = newHashSet();
+            inEdges = newHashSet();
+        }
+        Impl(Impl src) {
+            super(src);
+            outEdges = newHashSet(src.outEdges);
+            inEdges = newHashSet(src.inEdges);
+        }
+        private Set<CachedEdge> outEdges = newHashSet();
+        private Set<CachedEdge> inEdges = newHashSet();
+    }
+
+    private Set<CachedEdge> outEdges = newHashSet();
+    private Set<CachedEdge> inEdges = newHashSet();
 }

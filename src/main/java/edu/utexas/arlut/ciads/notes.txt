@@ -1,0 +1,30 @@
+
+Need pimpl/impl b/c the outside world has handles to the elements.
+   One thread could change the element at the same time as another.
+   Each transaction needs a copy of the impl, then an action list
+   Makes changes to the impls in the baseline.
+
+pimpl/impl allows versioning without action list?
+
+Need an action list b/c a straight merge won't work w/o merge rules?
+
+Merge rules:
+o add element: just add
+o remove element: just remove? (cascade edges)
+o add/set property: set if element exists
+o remove property: just add if element exists
+
+Merge order:
+1. remove edges
+2. remove vertices
+3. add vertices
+4. add edges
+5. remove properties (if element exists)
+6. set properties (if element exists)
+
+
+// ================
+Purely partitioned graph, single-threaded
+Keep revision in mutated/deleted list of impl copies, can
+    apply change with a simple merge.
+Need an action list for write-behind to SOR.

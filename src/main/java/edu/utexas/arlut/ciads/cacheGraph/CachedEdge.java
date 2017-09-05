@@ -9,15 +9,15 @@ import com.tinkerpop.blueprints.util.StringFactory;
 import static com.tinkerpop.blueprints.Direction.IN;
 import static com.tinkerpop.blueprints.Direction.OUT;
 
-public class CacheEdge extends CacheElement implements Edge {
+public class CachedEdge extends CachedElement implements Edge {
 
-    protected CacheEdge(String id, CacheVertex outVertex, CacheVertex inVertex, String label, CacheGraph cg) {
+    protected CachedEdge(String id, CachedVertex outVertex, CachedVertex inVertex, String label, CachedGraph cg) {
         super(id, cg);
         startVertex = outVertex;
         endVertex = inVertex;
         this.label = label;
     }
-    CacheEdge(Edge from, CacheVertex outVertex, CacheVertex inVertex, CacheGraph cg) {
+    CachedEdge(Edge from, CachedVertex outVertex, CachedVertex inVertex, CachedGraph cg) {
         super(from, cg);
         startVertex = outVertex;
         endVertex = inVertex;
@@ -52,6 +52,6 @@ public class CacheEdge extends CacheElement implements Edge {
         return StringFactory.edgeString(this);
     }
 
-    final CacheVertex startVertex, endVertex;
+    final CachedVertex startVertex, endVertex;
     final String label;
 }
