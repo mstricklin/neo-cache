@@ -1,4 +1,4 @@
-package edu.utexas.arlut.amt.graph.impl.cpiGraph;
+package edu.utexas.arlut.ciads.cpiGraph;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.in;
@@ -23,10 +23,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
-    CPIGraph(String graphId, CPIGraphFactory factory) {
-        log.info("Start CPIGraph w/ id {}", graphId);
+    public static final String ID = "__id";
+
+    CPIGraph(String graphId, CPIGraphManager manager) {
+        log.info("Start CPIGraph w/ id '{}'", graphId);
         this.graphId = graphId;
-        this.factory = factory;
+        this.manager = manager;
+    }
+    public String getId() {
+        return graphId;
     }
 
     private static final Features FEATURES = new Features();
@@ -75,7 +80,6 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         return new IllegalArgumentException("Element "+id+" has been deleted");
     }
     // =================================
-    // TODO: consider merging vertex and edge caches, since their IDs likely (?) won't collide
     CPIVertexProxy.CPIVertex vertexImpl(String id) {
         if (deletedVertices.contains(id))
             throw deletedElementException(id);
@@ -113,15 +117,32 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // TODO: exception on not present...
     }
     // =================================
+    void fastAdd(Vertex v) {
+        String id = v.getId().toString();
+        CPIVertexProxy.CPIVertex impl = new CPIVertexProxy.CPIVertex(id);
+        impl.putProperties(v);
+        vertexCache.put(id, impl);
+    }
+    void fastAdd(Edge e) {
+        String id = e.getId().toString();
+        CPIEdgeProxy.CPIEdge impl = new CPIEdgeProxy.CPIEdge(e);
+        impl.putProperties(e);
+        edgeCache.put(id, impl);
+    }
+    // =================================
     @Override
     public Vertex addVertex(Object id_) {
-        String id = null == id_ ? factory.vertexId() : id_.toString();
+        String id = null == id_ ? manager.vertexId() : id_.toString();
         CPIVertexProxy.CPIVertex impl = new CPIVertexProxy.CPIVertex(id);
         mutatedVertices.put(id, impl);
-        // TODO: write-behind action add vertex
-        // TODO: write-behind action setProperty ID
+        impl.properties.put(ID, id);
+
+        manager.addVertex(impl, graphId);
+        manager.setProperty(impl, ID, id);
+
         return new CPIVertexProxy(id, this);
     }
+
 
     @Override
     public Vertex getVertex(Object id) {
@@ -169,9 +190,10 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // TODO: assert non-null & cast-ability
         if (label == null)
             throw edgeLabelCanNotBeNull();
-        String id = null == id_ ? factory.edgeId() : id_.toString();
+        String id = null == id_ ? manager.edgeId() : id_.toString();
         CPIEdgeProxy.CPIEdge impl = new CPIEdgeProxy.CPIEdge(id, outVertex.getId().toString(), inVertex.getId().toString(), label);
         mutatedEdges.put(id, impl);
+        impl.properties.put(ID, id);
         ((CPIVertexProxy)outVertex).addOutEdge(id);
         ((CPIVertexProxy)inVertex).addInEdge(id);
         // TODO: write-behind action add edge
@@ -266,6 +288,9 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
         vertexCache.putAll(mutatedVertices);
         edgeCache.putAll(mutatedEdges);
+
+        manager.commit();
+
         // TODO: incremental indices
         reset();
     }
@@ -278,12 +303,12 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     // =======================================
     @Override
     public <T extends Element> void dropKeyIndex(String key, Class<T> elementClass) {
-
+        // write to SOR
     }
 
     @Override
     public <T extends Element> void createKeyIndex(String key, Class<T> elementClass, Parameter... indexParameters) {
-
+        // write to SOR
     }
 
     @Override
@@ -301,12 +326,13 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     public void shutdown() {
         // TODO: how to coördinate?
         // 1. flush all write-behind
-        // 2. tell factory to remove us
+        // 2. tell manager to remove us
+//        manager.commit();
     }
 
     // =======================================
     private final String graphId;
-    private final CPIGraphFactory factory;
+    final CPIGraphManager manager;
     final Cache<String, CPIVertexProxy.CPIVertex> vertexCache = CacheBuilder.newBuilder()
                                                                             .maximumSize(1000)
                                                                             .build();

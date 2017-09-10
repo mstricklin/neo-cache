@@ -11,13 +11,12 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
-import com.tinkerpop.blueprints.Direction;
-import com.tinkerpop.blueprints.Edge;
-import com.tinkerpop.blueprints.Vertex;
-import com.tinkerpop.blueprints.VertexQuery;
+import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.util.DefaultVertexQuery;
 import com.tinkerpop.blueprints.util.StringFactory;
 import com.tinkerpop.blueprints.util.VerticesFromEdgesIterable;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -120,8 +119,12 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
             outEdges = newHashSet(src.outEdges);
             inEdges = newHashSet(src.inEdges);
         }
-
         private final Set<String> outEdges;
         private final Set<String> inEdges;
+
+        // this *may* be populated later by the write-behind queue. It's an optimization to keep from repeatedly
+        // looking up the underlying element from the id.
+        @Setter @Getter
+        protected Vertex base = null;
     }
 }

@@ -10,6 +10,7 @@ import com.tinkerpop.blueprints.util.StringFactory;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -110,7 +111,8 @@ public class CachedGraph<T extends TransactionalGraph & KeyIndexableGraph>
 
     @Override
     public Iterable<Vertex> getVertices() {
-        return ImmutableList.copyOf(vertexCache.asMap().values());
+//        return ImmutableList.copyOf(vertexCache.asMap().values());
+        return Collections.emptyList();
     }
 
     @Override
@@ -163,7 +165,8 @@ public class CachedGraph<T extends TransactionalGraph & KeyIndexableGraph>
 
     @Override
     public Iterable<Edge> getEdges() {
-        return ImmutableList.copyOf(edgeCache.asMap().values());
+//        return ImmutableList.copyOf(edgeCache.asMap().values());
+        return Collections.emptyList();
     }
 
     @Override

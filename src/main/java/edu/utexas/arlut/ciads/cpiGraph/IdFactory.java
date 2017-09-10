@@ -1,10 +1,8 @@
-package edu.utexas.arlut.amt.graph.impl.cpiGraph;
+package edu.utexas.arlut.ciads.cpiGraph;
 
 import java.util.UUID;
 
 public interface IdFactory {
-
-    String ID = "__id";
 
     String call();
 

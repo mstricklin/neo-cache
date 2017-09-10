@@ -7,6 +7,8 @@ import com.tinkerpop.blueprints.Direction;
 import com.tinkerpop.blueprints.Edge;
 import com.tinkerpop.blueprints.Vertex;
 import com.tinkerpop.blueprints.util.StringFactory;
+import lombok.Getter;
+import lombok.Setter;
 
 public class CPIEdgeProxy extends CPIElementProxy implements Edge {
     public static Function<String, CPIEdgeProxy> MAKE(final CPIGraph g) {
@@ -75,7 +77,18 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
             this.inVertexId = src.inVertexId;
             this.label = src.label;
         }
+        CPIEdge(Edge e) {
+            super(e.getId().toString());
+            this.outVertexId = e.getVertex(Direction.OUT).getId().toString();
+            this.inVertexId = e.getVertex(Direction.IN).getId().toString();
+            this.label = e.getLabel();
+        }
         final String outVertexId, inVertexId;
         final String label;
+
+        // this *may* be populated later by the write-behind queue. It's an optimization to keep from repeatedly
+        // looking up the underlying element from the id.
+        @Setter @Getter
+        protected Edge base = null;
     }
 }

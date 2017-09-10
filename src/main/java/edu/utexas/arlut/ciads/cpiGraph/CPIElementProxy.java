@@ -1,4 +1,4 @@
-package edu.utexas.arlut.amt.graph.impl.cpiGraph;
+package edu.utexas.arlut.ciads.cpiGraph;
 
 import static com.google.common.collect.Maps.newHashMap;
 import static com.google.common.collect.Sets.newHashSet;
@@ -8,6 +8,8 @@ import java.util.Set;
 
 import com.tinkerpop.blueprints.Element;
 import com.tinkerpop.blueprints.util.ElementHelper;
+import lombok.Getter;
+import lombok.Setter;
 
 public abstract class CPIElementProxy implements Element {
     protected CPIElementProxy(String id, CPIGraph g) {
@@ -24,15 +26,18 @@ public abstract class CPIElementProxy implements Element {
     @Override
     public Set<String> getPropertyKeys() {
         Set<String> keys = newHashSet(getImpl().properties.keySet());
-        keys.remove(IdFactory.ID);
+        keys.remove(CPIGraph.ID);
         return keys;
     }
 
     @Override
     public void setProperty(String key, Object value) {
         ElementHelper.validateProperty(this, key, value);
-        getMutableImpl().properties.put(key, value);
+        CPIElement impl = getMutableImpl();
+        impl.properties.put(key, value);
+//        graph.manager.setProperty();
     }
+
 
     @Override
     public <T> T removeProperty(String key) {
@@ -60,14 +65,23 @@ public abstract class CPIElementProxy implements Element {
         return id.hashCode();
     }
     // =================================
-    public static class CPIElement {
+    public abstract static class CPIElement {
         CPIElement(String id) {
+            this.id = id;
             properties = newHashMap();
-            properties.put(IdFactory.ID, id);
         }
         CPIElement(CPIElement src) {
+            this.id = src.id;
             properties = newHashMap(src.properties);
         }
+        void putProperties(Element e) {
+            for (String key: e.getPropertyKeys()) {
+                properties.put(key, e.getProperty(key));
+            }
+        }
+        abstract Element getBase();
+        @Getter
+        protected final String id;
         protected final Map<String, Object> properties;
     }
     protected final String id;

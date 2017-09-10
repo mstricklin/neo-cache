@@ -80,7 +80,7 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             }
         });
     }
-    void addKeyIndex(final String key, Class<? extends Element> clazz) {
+    void addKeyIndex(final String key, final Class<? extends Element> clazz) {
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -91,7 +91,7 @@ public class CacheWB<T extends TransactionalGraph & KeyIndexableGraph> extends W
             }
         });
     }
-    void dropKeyIndex(final String key, Class<? extends Element> clazz) {
+    void dropKeyIndex(final String key, final Class<? extends Element> clazz) {
         executor.submit(new Runnable() {
             @Override
             public void run() {

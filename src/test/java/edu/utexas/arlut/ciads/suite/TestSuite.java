@@ -8,7 +8,7 @@ import com.google.common.base.Stopwatch;
 import com.tinkerpop.blueprints.Graph;
 import com.tinkerpop.blueprints.Vertex;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraph;
-import edu.utexas.arlut.ciads.cpiGraph.CPIGraphFactory;
+import edu.utexas.arlut.ciads.cpiGraph.CPIGraphManager;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.After;
 import org.junit.Before;
@@ -30,12 +30,12 @@ public class TestSuite {
     public TestName name = new TestName();
     public Stopwatch sw = Stopwatch.createUnstarted();
 
-    protected CPIGraphFactory factory = new CPIGraphFactory(null);
+    protected CPIGraphManager factory = new CPIGraphManager(null);
     protected Graph graph = null;
     protected CPIGraph gg = null;
 
     CPIGraph generateGraph() throws  IOException {
-        return factory.get("aaa");
+        return factory.getGraph("aaa");
     }
 
     @Before

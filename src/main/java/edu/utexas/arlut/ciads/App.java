@@ -3,14 +3,12 @@ package edu.utexas.arlut.ciads;
 
 import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.impls.neo4j.Neo4jGraph;
-import edu.utexas.arlut.ciads.cacheGraph.CachedGraph;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraph;
-import edu.utexas.arlut.ciads.cpiGraph.CPIGraphFactory;
+import edu.utexas.arlut.ciads.cpiGraph.CPIGraphManager;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
 
-import static com.google.common.collect.Maps.newHashMap;
 import static com.tinkerpop.blueprints.util.ElementHelper.getProperties;
 
 @Slf4j
@@ -22,8 +20,8 @@ public class App {
         log.info("Neo contents");
         dumpGraph(n4jg);
 
-        CPIGraphFactory cpiFactory = new CPIGraphFactory(n4jg);
-        CPIGraph cg = cpiFactory.get("aaa");
+        CPIGraphManager cpiManager = new CPIGraphManager(n4jg);
+        CPIGraph cg = cpiManager.create("aaa");
         log.info("Graph {}", cg);
 
         cg.createKeyIndex("foo", Vertex.class);
@@ -33,7 +31,7 @@ public class App {
         Vertex v1 = cg.addVertex(null);
         v1.setProperty("foo", "v1");
 
-        cg.addEdge(null, v0, v1, "sam");
+//        cg.addEdge(null, v0, v1, "sam");
 
 
         log.info("Cache contents");
@@ -57,9 +55,11 @@ public class App {
 //        log.info("Neo contents");
 //        dumpGraph(n4jg);
 
-        cg.shutdown();
+//        cg.shutdown();
+        cpiManager.shutdown();
 
-        n4jg.shutdown();
+
+//        n4jg.shutdown();
 
     }
 

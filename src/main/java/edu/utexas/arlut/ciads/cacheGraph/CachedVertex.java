@@ -30,11 +30,11 @@ public class CachedVertex extends CachedElement implements Vertex {
     @Override
     public Iterable<Edge> getEdges(Direction direction, String... labels) {
         // TODO: filter on labels
-        if (direction.equals(com.tinkerpop.blueprints.Direction.OUT))
-            return ImmutableList.copyOf(outEdges);
-        else if (direction.equals(com.tinkerpop.blueprints.Direction.IN))
-            return ImmutableList.copyOf(inEdges);
-        else
+//        if (direction.equals(com.tinkerpop.blueprints.Direction.OUT))
+//            return ImmutableList.copyOf(outEdges);
+//        else if (direction.equals(com.tinkerpop.blueprints.Direction.IN))
+//            return ImmutableList.copyOf(inEdges);
+//        else
             return new ImmutableList.Builder<Edge>()
                     .addAll(outEdges)
                     .addAll(inEdges)
@@ -83,6 +83,7 @@ public class CachedVertex extends CachedElement implements Vertex {
         graph.removeVertex(this);
     }
 
+    @Override
     public String toString() {
         return StringFactory.vertexString(this);
     }
