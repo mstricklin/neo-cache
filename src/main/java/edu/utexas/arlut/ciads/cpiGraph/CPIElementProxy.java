@@ -6,12 +6,21 @@ import static com.google.common.collect.Sets.newHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.base.Function;
 import com.tinkerpop.blueprints.Element;
 import com.tinkerpop.blueprints.util.ElementHelper;
 import lombok.Getter;
 import lombok.Setter;
 
 public abstract class CPIElementProxy implements Element {
+    public static Function<CPIElement, String> ID() {
+        return new Function<CPIElement, String>() {
+            @Override
+            public String apply(CPIElement e) {
+                return e.id;
+            }
+        };
+    }
     protected CPIElementProxy(String id, CPIGraph g) {
         this.id = id;
         this.graph = g;
@@ -35,13 +44,16 @@ public abstract class CPIElementProxy implements Element {
         ElementHelper.validateProperty(this, key, value);
         CPIElement impl = getMutableImpl();
         impl.properties.put(key, value);
-//        graph.manager.setProperty();
+        graph.manager.setProperty(impl, key, value);
     }
 
 
     @Override
     public <T> T removeProperty(String key) {
-        return (T)getMutableImpl().properties.remove(key);
+        CPIElement impl = getMutableImpl();
+        T t = (T)impl.properties.remove(key);
+        graph.manager.removeProperty(impl, key);
+        return t;
     }
 
     @Override
@@ -73,6 +85,10 @@ public abstract class CPIElementProxy implements Element {
         CPIElement(CPIElement src) {
             this.id = src.id;
             properties = newHashMap(src.properties);
+        }
+        CPIElement(String id, Element src) {
+            this(id);
+            putProperties(src);
         }
         void putProperties(Element e) {
             for (String key: e.getPropertyKeys()) {

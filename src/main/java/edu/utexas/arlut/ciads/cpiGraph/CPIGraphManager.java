@@ -1,16 +1,19 @@
 package edu.utexas.arlut.ciads.cpiGraph;
 
 
-import java.util.Set;
 import java.util.concurrent.*;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.util.wrappers.WrapperGraph;
+import edu.utexas.arlut.ciads.cpiGraph.CPIEdgeProxy.CPIEdge;
+import edu.utexas.arlut.ciads.cpiGraph.CPIElementProxy.CPIElement;
+import edu.utexas.arlut.ciads.cpiGraph.CPIVertexProxy.CPIVertex;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.lang.Boolean.*;
 
 @Slf4j
@@ -25,7 +28,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
         vIndex = resolvePartitionIndex(Vertex.class, V_PARTITION_IDX);
         eIndex = resolvePartitionIndex(Edge.class, E_PARTITION_IDX);
 
-        // don't need a cached index, already kept by ID
+        // don't need a indexed id, already kept by ID
 //        sor.createKeyIndex(CPIGraph.ID, Vertex.class);
 //        sor.createKeyIndex(CPIGraph.ID, Edge.class);
 
@@ -42,7 +45,6 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     public void shutdown() {
         for (CPIGraph g : graphs.asMap().values())
             g.shutdown();
-        // TODO: timed wait?
         executor.shutdown();
         try {
             executor.awaitTermination(60, TimeUnit.SECONDS);
@@ -71,7 +73,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     }
 
     // =================================
-    void addVertex(final CPIVertexProxy.CPIVertex v, final String partitionKey) {
+    void addVertex(final CPIVertex v, final String partitionKey) {
         enqueue(new Runnable() {
             @Override
             public void run() {
@@ -87,7 +89,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
         });
     }
 
-    void removeVertex(final CPIVertexProxy.CPIVertex v) {
+    void removeVertex(final CPIVertex v) {
         enqueue(new Runnable() {
             @Override
             public void run() {
@@ -102,7 +104,38 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
         });
     }
 
-    void setProperty(final CPIElementProxy.CPIElement e, final String key, final Object value) {
+    void addEdge(final CPIEdge e, final CPIVertex oV, final CPIVertex iV, final String partitionKey) {
+        enqueue(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    log.info("SOR addEdge {}", e.getId());
+                    Edge sorE = sor.addEdge(e.getId(), oV.getBase(), iV.getBase(), e.label);
+                    eIndex.put(partitionKey, TRUE, sorE);
+                    e.setBase(sorE);
+                } catch (Exception e) {
+                    log.error("SOR addEdge Exception", e);
+                }
+            }
+        });
+    }
+
+    void removeEdge(final CPIEdge e) {
+        enqueue(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    log.info("SOR removeEdge {}", e.getId());
+                    Edge sorE = e.getBase();
+                    sor.removeEdge(sorE);
+                } catch (Exception e) {
+                    log.error("SOR removeEdge Exception", e);
+                }
+            }
+        });
+    }
+
+    void setProperty(final CPIElement e, final String key, final Object value) {
         enqueue(new Runnable() {
             @Override
             public void run() {
@@ -119,16 +152,16 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
         });
     }
 
-    void removeProperty(final CPIVertexProxy.CPIVertex v, final String key) {
+    void removeProperty(final CPIElement e, final String key) {
         enqueue(new Runnable() {
             @Override
             public void run() {
                 try {
-                    log.info("SOR removeProperty {} {}", v.getId(), key);
-                    Vertex sorV = v.getBase();
-                    if (null == sorV)
+                    log.info("SOR removeProperty {} {}", e.getId(), key);
+                    Element sorE = e.getBase();
+                    if (null == sorE)
                         ; // TODO: need to populate if not exists!
-                    sorV.removeProperty(key);
+                    sorE.removeProperty(key);
                 } catch (Exception e) {
                     log.error("SOR removeProperty Exception", e);
                 }
@@ -146,11 +179,15 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     }
 
     // =======================================
-    String vertexId() {
+    String vertexId(String id) {
+        if (null != id)
+            return id;
         return vertexIdFactory.call();
     }
 
-    String edgeId() {
+    String edgeId(String id) {
+        if (null != id)
+            return id;
         return edgeIdFactory.call();
     }
 
@@ -165,9 +202,9 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     private void load(CPIGraph g) {
         // load up from system of record
         for (Vertex v : vIndex.get(g.getId(), TRUE))
-            g.fastAdd(v);
+            g.rawAdd(v);
         for (Edge e : eIndex.get(g.getId(), TRUE))
-            g.fastAdd(e);
+            g.rawAdd(e);
     }
 
     void enqueue(Runnable r) {

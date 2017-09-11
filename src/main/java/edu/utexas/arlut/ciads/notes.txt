@@ -28,3 +28,13 @@ Purely partitioned graph, single-threaded
 Keep revision in mutated/deleted list of impl copies, can
     apply change with a simple merge.
 Need an action list for write-behind to SOR.
+
+// ================
+TODO:
+1. finish rawAdd(Edge)
+2. W-B test edges
+3. W-B index operations
+4. key indices for CPIGraph
+5. load indices
+6. create partition w/ Loader
+7. create partition w/ copy

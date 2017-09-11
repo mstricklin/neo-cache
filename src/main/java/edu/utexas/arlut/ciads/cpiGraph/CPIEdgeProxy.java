@@ -19,6 +19,14 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
             }
         };
     }
+    public static Function<CPIEdge, CPIEdgeProxy> PROXY(final CPIGraph g) {
+        return new Function<CPIEdge, CPIEdgeProxy>() {
+            @Override
+            public CPIEdgeProxy apply(CPIEdge v) {
+                return new CPIEdgeProxy(v.id, g);
+            }
+        };
+    }
     public static final Function<CPIEdgeProxy, Edge> DOWNCAST = new Function<CPIEdgeProxy, Edge>() {
         @Override
         public Edge apply(CPIEdgeProxy input) {
@@ -76,12 +84,14 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
             this.outVertexId = src.outVertexId;
             this.inVertexId = src.inVertexId;
             this.label = src.label;
+            this.base = src.base;
         }
-        CPIEdge(Edge e) {
-            super(e.getId().toString());
+        CPIEdge(String id, Edge e) {
+            super(id, e);
             this.outVertexId = e.getVertex(Direction.OUT).getId().toString();
             this.inVertexId = e.getVertex(Direction.IN).getId().toString();
             this.label = e.getLabel();
+            base = e;
         }
         final String outVertexId, inVertexId;
         final String label;

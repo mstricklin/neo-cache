@@ -1,5 +1,6 @@
 package edu.utexas.arlut.ciads.cpiGraph;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.tinkerpop.blueprints.Direction.IN;
 import static com.tinkerpop.blueprints.Direction.OUT;
@@ -26,6 +27,14 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
             @Override
             public CPIVertexProxy apply(String id) {
                 return new CPIVertexProxy(id, g);
+            }
+        };
+    }
+    public static Function<CPIVertex, CPIVertexProxy> PROXY(final CPIGraph g) {
+        return new Function<CPIVertex, CPIVertexProxy>() {
+            @Override
+            public CPIVertexProxy apply(CPIVertex v) {
+                return new CPIVertexProxy(v.id, g);
             }
         };
     }
@@ -118,9 +127,16 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
             super(src);
             outEdges = newHashSet(src.outEdges);
             inEdges = newHashSet(src.inEdges);
+            base = src.base;
         }
-        private final Set<String> outEdges;
-        private final Set<String> inEdges;
+        CPIVertex(String id, Vertex v) {
+            super(id, v);
+            outEdges = newHashSet();
+            inEdges = newHashSet();
+            base = v;
+        }
+        final Set<String> outEdges;
+        final Set<String> inEdges;
 
         // this *may* be populated later by the write-behind queue. It's an optimization to keep from repeatedly
         // looking up the underlying element from the id.

@@ -5,6 +5,7 @@ import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.impls.neo4j.Neo4jGraph;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraph;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraphManager;
+import edu.utexas.arlut.ciads.cpiGraph.CPIVertexProxy;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
@@ -25,29 +26,49 @@ public class App {
         log.info("Graph {}", cg);
 
         cg.createKeyIndex("foo", Vertex.class);
-        Vertex v0 = cg.addVertex(null);
-        v0.setProperty("foo", "v0");
 
-        Vertex v1 = cg.addVertex(null);
-        v1.setProperty("foo", "v1");
+//        Vertex v0 = cg.getVertex("v0");
+//        log.info("Got v0: {}", v0);
+//        Vertex v1 = cg.getVertex("v1");
+//        log.info("Got v1: {}", v1);
+
+//        log.info("===");
+//        cg.removeVertex(v0);
+//        dumpGraph(cg);
+
+
+//        Vertex v0 = cg.addVertex("v0");
+//        v0.setProperty("foo", "v0");
+//
+//        Vertex v1 = cg.addVertex("v1");
+//        v1.setProperty("foo", "v1");
+//
+//        Edge e0 = cg.addEdge("e0", v0, v1, "sam");
+//        e0.setProperty("foo", "e1");
+
+        log.info("= dump cpi =");
+        dumpGraph(cg);
+        Thread.sleep(500);
+        log.info("= dump neo4j =");
+        dumpGraph(n4jg);
+
 
 //        cg.addEdge(null, v0, v1, "sam");
 
 
-        log.info("Cache contents");
-        dumpGraph(cg);
-        log.info("rollback contents");
-
-        cg.rollback();
-        dumpGraph(cg);
-
-        v0 = cg.addVertex(null);
-        v0.setProperty("foo", "v0");
-        log.info("commit contents");
-
+//        log.info("Cache contents");
+//        dumpGraph(cg);
+//        log.info("rollback contents");
+//
+//        cg.rollback();
+//        dumpGraph(cg);
+//
+//        v0 = cg.addVertex(null);
+//        v0.setProperty("foo", "v0");
+//        log.info("commit contents");
+//
         cg.commit();
-        dumpGraph(cg);
-
+//        dumpGraph(cg);
 
 
 //        Thread.sleep(500);
@@ -64,15 +85,16 @@ public class App {
     }
 
     private static void dumpProperties(Element e) {
-        for (Map.Entry<String, Object> me: getProperties(e).entrySet())
+        for (Map.Entry<String, Object> me : getProperties(e).entrySet())
             log.info("\t{} => {}", me.getKey(), me.getValue());
     }
+
     public static void dumpGraph(Graph g) {
-        for (Vertex v: g.getVertices()) {
+        for (Vertex v : g.getVertices()) {
             log.info("v: {}", v);
             dumpProperties(v);
         }
-        for (Edge e: g.getEdges()) {
+        for (Edge e : g.getEdges()) {
             log.info("e: {}", e);
             dumpProperties(e);
         }
