@@ -91,6 +91,14 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
     public Iterable<Vertex> getVertices(Direction direction, String... labels) {
         return new VerticesFromEdgesIterable(this, direction, labels);
     }
+    @Override
+    protected void _setProperty(String key, Object value) {
+        graph.queueAction(graph.manager.setVProperty(graph.getId(), id, key, value));
+    }
+    @Override
+    protected void _rmProperty(String key) {
+        graph.queueAction(graph.manager.removeVProperty(graph.getId(), id, key));
+    }
 
     @Override
     public VertexQuery query() {
@@ -127,20 +135,20 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
             super(src);
             outEdges = newHashSet(src.outEdges);
             inEdges = newHashSet(src.inEdges);
-            base = src.base;
+//            base = src.base;
         }
         CPIVertex(String id, Vertex v) {
             super(id, v);
             outEdges = newHashSet();
             inEdges = newHashSet();
-            base = v;
+//            base = v;
         }
         final Set<String> outEdges;
         final Set<String> inEdges;
 
         // this *may* be populated later by the write-behind queue. It's an optimization to keep from repeatedly
         // looking up the underlying element from the id.
-        @Setter @Getter
-        protected Vertex base = null;
+//        @Setter @Getter
+//        protected Vertex base = null;
     }
 }

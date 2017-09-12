@@ -58,6 +58,14 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
         return new CPIVertexProxy(getImpl().inVertexId, graph);
     }
 
+    protected void _setProperty(String key, Object value) {
+        graph.queueAction(graph.manager.setEProperty(graph.getId(), id, key, value));
+    }
+    @Override
+    protected void _rmProperty(String key) {
+        graph.queueAction(graph.manager.removeEProperty(graph.getId(), id, key));
+    }
+
     @Override
     public String getLabel() {
         return getImpl().label;
@@ -84,21 +92,21 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
             this.outVertexId = src.outVertexId;
             this.inVertexId = src.inVertexId;
             this.label = src.label;
-            this.base = src.base;
+//            this.base = src.base;
         }
         CPIEdge(String id, Edge e) {
             super(id, e);
             this.outVertexId = e.getVertex(Direction.OUT).getId().toString();
             this.inVertexId = e.getVertex(Direction.IN).getId().toString();
             this.label = e.getLabel();
-            base = e;
+//            base = e;
         }
         final String outVertexId, inVertexId;
         final String label;
 
         // this *may* be populated later by the write-behind queue. It's an optimization to keep from repeatedly
         // looking up the underlying element from the id.
-        @Setter @Getter
-        protected Edge base = null;
+//        @Setter @Getter
+//        protected Edge base = null;
     }
 }

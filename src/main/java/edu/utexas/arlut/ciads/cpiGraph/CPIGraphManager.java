@@ -1,6 +1,8 @@
 package edu.utexas.arlut.ciads.cpiGraph;
 
 
+import java.util.NoSuchElementException;
+import java.util.Queue;
 import java.util.concurrent.*;
 
 import com.google.common.cache.Cache;
@@ -14,6 +16,8 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
+import static com.google.common.collect.Iterables.getFirst;
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.lang.Boolean.*;
 
 @Slf4j
@@ -28,17 +32,22 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
         vIndex = resolvePartitionIndex(Vertex.class, V_PARTITION_IDX);
         eIndex = resolvePartitionIndex(Edge.class, E_PARTITION_IDX);
 
-        // don't need a indexed id, already kept by ID
-//        sor.createKeyIndex(CPIGraph.ID, Vertex.class);
-//        sor.createKeyIndex(CPIGraph.ID, Edge.class);
-
-        // keep a cached index for each?
-//        sor.getIndexedKeys(Vertex.class);
+        // tweak element lookups for write-behinds
+        sor.createKeyIndex(CPIGraph.ID, Vertex.class);
+        sor.createKeyIndex(CPIGraph.ID, Edge.class);
+        sor.createKeyIndex(CPIGraph.PARTITION, Vertex.class);
+        sor.createKeyIndex(CPIGraph.PARTITION, Edge.class);
     }
 
     public CPIGraph create(String graphId) {
         CPIGraph g = new CPIGraph(graphId, this);
         load(g);
+        return g;
+    }
+    public CPIGraph createFrom(CPIGraph src, String graphId) {
+        CPIGraph g = new CPIGraph(src, graphId, this);
+//        load(g);
+
         return g;
     }
 
@@ -73,109 +82,181 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     }
 
     // =================================
-    void addVertex(final CPIVertex v, final String partitionKey) {
-        enqueue(new Runnable() {
+    Runnable addVertex(final String partition, final String id) {
+        return new Runnable() {
             @Override
             public void run() {
                 try {
-                    log.info("SOR addVertex {}", v.getId());
-                    Vertex sorV = sor.addVertex(v.getId());
-                    vIndex.put(partitionKey, TRUE, sorV);
-                    v.setBase(sorV);
+                    log.info("SOR addVertex {}", id);
+                    Vertex sorV = sor.addVertex(id);
+                    vIndex.put(partition, TRUE, sorV);
+                    sorV.setProperty(CPIGraph.PARTITION, partition);
+                    sorV.setProperty(CPIGraph.ID, id);
                 } catch (Exception e) {
                     log.error("SOR addVertex Exception", e);
                 }
             }
-        });
+        };
     }
 
-    void removeVertex(final CPIVertex v) {
-        enqueue(new Runnable() {
+    Runnable removeVertex(final String partition, final String id) {
+        return new Runnable() {
             @Override
             public void run() {
                 try {
-                    log.info("SOR removeVertex {}", v.getId());
-                    Vertex sorV = v.getBase();
+                    Vertex sorV = lookupVertex(partition, id);
+                    log.info("SOR removeVertex {} {}", id, sorV);
                     sor.removeVertex(sorV);
                 } catch (Exception e) {
                     log.error("SOR removeVertex Exception", e);
                 }
             }
-        });
+        };
     }
 
-    void addEdge(final CPIEdge e, final CPIVertex oV, final CPIVertex iV, final String partitionKey) {
-        enqueue(new Runnable() {
+    Runnable addEdge(final String partition, final String id, final String ovID, final String ivID, final String label) {
+        return new Runnable() {
             @Override
             public void run() {
                 try {
-                    log.info("SOR addEdge {}", e.getId());
-                    Edge sorE = sor.addEdge(e.getId(), oV.getBase(), iV.getBase(), e.label);
-                    eIndex.put(partitionKey, TRUE, sorE);
-                    e.setBase(sorE);
+                    log.info("SOR addEdge {}", id);
+                    Vertex oSorV = lookupVertex(partition, ovID);
+                    Vertex iSorV = lookupVertex(partition, ivID);
+                    Edge sorE = sor.addEdge(id, oSorV, iSorV, label);
+                    eIndex.put(partition, TRUE, sorE);
+
+                    sorE.setProperty(CPIGraph.PARTITION, partition);
+                    sorE.setProperty(CPIGraph.ID, id);
                 } catch (Exception e) {
                     log.error("SOR addEdge Exception", e);
                 }
             }
-        });
+        };
     }
 
-    void removeEdge(final CPIEdge e) {
-        enqueue(new Runnable() {
+    Runnable removeEdge(final String partition, final String id) {
+        return new Runnable() {
             @Override
             public void run() {
                 try {
-                    log.info("SOR removeEdge {}", e.getId());
-                    Edge sorE = e.getBase();
+                    Edge sorE = lookupEdge(partition, id);
+                    log.info("SOR removeEdge {} {}", id, sorE);
                     sor.removeEdge(sorE);
                 } catch (Exception e) {
                     log.error("SOR removeEdge Exception", e);
                 }
             }
-        });
+        };
     }
 
-    void setProperty(final CPIElement e, final String key, final Object value) {
-        enqueue(new Runnable() {
+    Runnable setVProperty(final String partition, final String id, final String key, final Object value) {
+        return new Runnable() {
             @Override
             public void run() {
-                try {
-                    log.info("SOR setProperty {} {} => {}", e.getId(), key, value);
-                    Element sorE = e.getBase();
-                    if (null == sorE)
-                        ; // TODO: need to populate if not exists!
-                    sorE.setProperty(key, value);
-                } catch (Exception e) {
-                    log.error("SOR setProperty Exception", e);
-                }
+                Element sorE = lookupVertex(partition, id);
+                setProperty(sorE, key, value);
             }
-        });
+        };
     }
-
-    void removeProperty(final CPIElement e, final String key) {
-        enqueue(new Runnable() {
+    Runnable setEProperty(final String partition, final String id, final String key, final Object value) {
+        return new Runnable() {
             @Override
             public void run() {
-                try {
-                    log.info("SOR removeProperty {} {}", e.getId(), key);
-                    Element sorE = e.getBase();
-                    if (null == sorE)
-                        ; // TODO: need to populate if not exists!
-                    sorE.removeProperty(key);
-                } catch (Exception e) {
-                    log.error("SOR removeProperty Exception", e);
-                }
+                Element sorE = lookupEdge(partition, id);
+                setProperty(sorE, key, value);
             }
-        });
+        };
     }
 
-    void commit() {
-        enqueue(new Runnable() {
+    private void setProperty(final Element sorE, final String key, final Object value) {
+        try {
+            log.info("SOR setProperty {} {} => {}", sorE, key, value);
+            sorE.setProperty(key, value);
+        } catch (Exception e) {
+            log.error("SOR setProperty Exception", e);
+        }
+    }
+
+    Runnable removeVProperty(final String partition, final String id, final String key) {
+        return new Runnable() {
             @Override
             public void run() {
+                Element sorE = lookupVertex(partition, id);
+                removeProperty(sorE, key);
+            }
+        };
+    }
+    Runnable removeEProperty(final String partition, final String id, final String key) {
+        return new Runnable() {
+            @Override
+            public void run() {
+                Element sorE = lookupEdge(partition, id);
+                removeProperty(sorE, key);
+            }
+        };
+    }
+    private void removeProperty(final Element sorE, final String key) {
+        try {
+            log.info("SOR removeProperty {} {}", sorE, key);
+            sorE.removeProperty(key);
+        } catch (Exception e) {
+            log.error("SOR removeProperty Exception", e);
+        }
+    }
+
+    Runnable commit() {
+        return new Runnable() {
+            @Override
+            public void run() {
+                log.info("SOR commit");
                 sor.commit();
             }
-        });
+        };
+    }
+
+    Runnable rollback() {
+        return new Runnable() {
+            @Override
+            public void run() {
+                log.info("SOR rollback");
+                sor.rollback();
+            }
+        };
+    }
+
+    private Vertex lookupVertex(String partition, String id) {
+        try {
+            return getOnlyElement(sor.query().has(CPIGraph.ID, id)
+                    .has(CPIGraph.PARTITION, partition)
+                    .vertices());
+        } catch (NoSuchElementException e) {
+            log.error("No vertex found with id {}", id);
+            throw e;
+        } catch (IllegalArgumentException e) {
+            log.error("Multiple vertices found with id {}", id);
+            return getFirst(sor.getVertices(CPIGraph.ID, id), null);
+        }
+    }
+
+    private Edge lookupEdge(String partition, String id) {
+        try {
+            return getOnlyElement(sor.query().has(CPIGraph.ID, id)
+                    .has(CPIGraph.PARTITION, partition)
+                    .edges());
+        } catch (NoSuchElementException e) {
+            log.error("No vertex found with id {}", id);
+            throw e;
+        } catch (IllegalArgumentException e) {
+            log.error("Multiple edges found with id {}", id);
+            return getFirst(sor.query().has(CPIGraph.ID, id).has(partition, true).edges(), null);
+        }
+    }
+
+    void queue(Queue<Runnable> q) {
+        // lock...
+        while ( ! q.isEmpty() ) {
+            executor.submit( q.remove() );
+        }
     }
 
     // =======================================
@@ -192,9 +273,9 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     }
 
     // =======================================
-    private <T extends Element> Index<T> resolvePartitionIndex(Class<T> clazz, String name) {
+    private <E extends Element> Index<E> resolvePartitionIndex(Class<E> clazz, String name) {
 //        return sor.createIndex(name, clazz);
-        Index<T> idx = sor.getIndex(name, clazz);
+        Index<E> idx = sor.getIndex(name, clazz);
         return (null == idx) ? sor.createIndex(name, clazz)
                 : idx;
     }
@@ -205,10 +286,6 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
             g.rawAdd(v);
         for (Edge e : eIndex.get(g.getId(), TRUE))
             g.rawAdd(e);
-    }
-
-    void enqueue(Runnable r) {
-        executor.submit(r);
     }
 
     // =================================
@@ -222,7 +299,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & WrapperGraph<T> & Ind
     @Setter
     IdFactory edgeIdFactory;
 
-    Cache<String, CPIGraph> graphs = CacheBuilder.newBuilder()
+    private Cache<String, CPIGraph> graphs = CacheBuilder.newBuilder()
             .maximumSize(100)
             .expireAfterAccess(120, TimeUnit.MINUTES)
             .build();

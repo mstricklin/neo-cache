@@ -5,11 +5,13 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Predicates.in;
 import static com.google.common.base.Predicates.not;
 import static com.google.common.collect.Maps.newHashMap;
+import static com.google.common.collect.Queues.newArrayDeque;
 import static com.google.common.collect.Sets.newHashSet;
 import static com.tinkerpop.blueprints.util.ExceptionFactory.edgeLabelCanNotBeNull;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 
 import com.google.common.cache.Cache;
@@ -20,17 +22,41 @@ import com.tinkerpop.blueprints.util.DefaultGraphQuery;
 import com.tinkerpop.blueprints.util.ExceptionFactory;
 import com.tinkerpop.blueprints.util.PropertyFilteredIterable;
 import com.tinkerpop.blueprints.util.StringFactory;
+import edu.utexas.arlut.ciads.cpiGraph.CPIEdgeProxy.CPIEdge;
+import edu.utexas.arlut.ciads.cpiGraph.CPIVertexProxy.CPIVertex;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
     public static final String ID = "__id";
+    public static final String PARTITION = "__partition";
 
     CPIGraph(String graphId, CPIGraphManager manager) {
-        log.info("Start CPIGraph w/ id '{}'", graphId);
+        log.info("Init CPIGraph w/ id '{}'", graphId);
         this.graphId = graphId;
         this.manager = manager;
+    }
+    CPIGraph(CPIGraph src, String graphId, CPIGraphManager manager) {
+        // TODO: queue up W-B & commit
+        log.info("Init CPIGraph from {} w/ id '{}'", src.graphId, graphId);
+        this.graphId = graphId;
+        this.manager = manager;
+        for (Map.Entry<String, CPIVertex> ve: src.vertexCache.asMap().entrySet()) {
+            CPIVertex impl = new CPIVertex(ve.getValue());
+            vertexCache.put(ve.getKey(), impl);
+            manager.addVertex(graphId, impl.getId());
+            for (Map.Entry<String, Object> pe: impl.properties.entrySet()) {
+                manager.setVProperty(graphId, impl.getId(), pe.getKey(), pe.getValue());
+            }
+        }
+        for (Map.Entry<String, CPIEdge> ve: src.edgeCache.asMap().entrySet()) {
+            CPIEdge impl = new CPIEdge(ve.getValue());
+            edgeCache.put(ve.getKey(), impl);
+            manager.addEdge(graphId, impl.getId(), impl.outVertexId, impl.inVertexId, impl.label);
+            for (Map.Entry<String, Object> pe: impl.properties.entrySet())
+                manager.setEProperty(graphId, impl.getId(), pe.getKey(), pe.getValue());
+        }
     }
 
     public String getId() {
@@ -55,7 +81,7 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
         FEATURES.supportsDuplicateEdges = true;
         FEATURES.supportsSelfLoops = true;
-        FEATURES.isPersistent = false; //true; // TODO
+        FEATURES.isPersistent = true;
         FEATURES.isWrapper = false;
         FEATURES.supportsVertexIteration = true;
         FEATURES.supportsEdgeIteration = true;
@@ -85,7 +111,7 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     }
 
     // =================================
-    CPIVertexProxy.CPIVertex vertexImpl(String id) {
+    CPIVertex vertexImpl(String id) {
         if (deletedVertices.contains(id))
             throw deletedElementException(id);
         return mutatedVertices.containsKey(id) ? mutatedVertices.get(id)
@@ -93,19 +119,19 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // TODO: exception on not present...
     }
 
-    CPIVertexProxy.CPIVertex mutableVertexImpl(String id) {
+    CPIVertex mutableVertexImpl(String id) {
         if (deletedVertices.contains(id))
             throw deletedElementException(id);
         if (mutatedVertices.containsKey(id)) {
             return mutatedVertices.get(id);
         }
-        CPIVertexProxy.CPIVertex v = new CPIVertexProxy.CPIVertex(vertexCache.getIfPresent(id));
+        CPIVertex v = new CPIVertex(vertexCache.getIfPresent(id));
         mutatedVertices.put(id, v);
         return v;
         // TODO: exception on not present...
     }
 
-    CPIEdgeProxy.CPIEdge edgeImpl(String id) {
+    CPIEdge edgeImpl(String id) {
         if (deletedEdges.contains(id))
             throw deletedElementException(id);
         return mutatedEdges.containsKey(id) ? mutatedEdges.get(id)
@@ -113,13 +139,13 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // TODO: exception on not present...
     }
 
-    CPIEdgeProxy.CPIEdge mutableEdgeImpl(String id) {
+    CPIEdge mutableEdgeImpl(String id) {
         if (deletedEdges.contains(id))
             throw deletedElementException(id);
         if (mutatedEdges.containsKey(id)) {
             return mutatedEdges.get(id);
         }
-        CPIEdgeProxy.CPIEdge e = new CPIEdgeProxy.CPIEdge(edgeCache.getIfPresent(id));
+        CPIEdge e = new CPIEdge(edgeCache.getIfPresent(id));
         mutatedEdges.put(id, e);
         return e;
         // TODO: exception on not present...
@@ -128,9 +154,8 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     // =================================
     void rawAdd(Vertex v) {
         String id = firstNonNull(v.getProperty(ID), v.getId()).toString();
-        CPIVertexProxy.CPIVertex impl = new CPIVertexProxy.CPIVertex(id);
+        CPIVertex impl = new CPIVertex(id);
         impl.putProperties(v);
-        impl.setBase(v);
         vertexCache.put(id, impl);
     }
 
@@ -145,9 +170,8 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         String inID = firstNonNull(inVertex.getProperty(ID), inVertex.getId()).toString();
         vertexImpl(inID).inEdges.add(id);
 
-        CPIEdgeProxy.CPIEdge impl = new CPIEdgeProxy.CPIEdge(id, outID, inID, e.getLabel());
+        CPIEdge impl = new CPIEdge(id, outID, inID, e.getLabel());
         impl.putProperties(e);
-        impl.setBase(e);
         edgeCache.put(id, impl);
     }
 
@@ -155,12 +179,11 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     @Override
     public Vertex addVertex(Object id_) {
         String id = manager.vertexId(id_.toString());
-        CPIVertexProxy.CPIVertex impl = new CPIVertexProxy.CPIVertex(id);
+        CPIVertex impl = new CPIVertex(id);
         mutatedVertices.put(id, impl);
         impl.properties.put(ID, id);
 
-        manager.addVertex(impl, graphId);
-        manager.setProperty(impl, ID, id);
+        queueAction(manager.addVertex(graphId, id));
 
         return new CPIVertexProxy(id, this);
     }
@@ -179,16 +202,15 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
     @Override
     public void removeVertex(Vertex vertex) {
-        String id = vertex.getId().toString();
         checkNotNull(vertex);
         for (Edge e : vertex.getEdges(Direction.BOTH))
             removeEdge(e);
 
+        String id = vertex.getId().toString();
         mutatedVertices.remove(id);
         deletedVertices.add(id);
 
-        CPIVertexProxy.CPIVertex impl = mutableVertexImpl(id);
-        manager.removeVertex(impl);
+        queueAction(manager.removeVertex(graphId, id));
     }
 
 
@@ -219,21 +241,22 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         if (label == null)
             throw edgeLabelCanNotBeNull();
         String id = manager.edgeId(id_.toString());
-        CPIEdgeProxy.CPIEdge impl = new CPIEdgeProxy.CPIEdge(id,
+        CPIEdge impl = new CPIEdge(id,
                 outVertex.getId().toString(),
                 inVertex.getId().toString(),
                 label);
         mutatedEdges.put(id, impl);
         impl.properties.put(ID, id);
 
-        ((CPIVertexProxy) outVertex).addOutEdge(id);
-        ((CPIVertexProxy) inVertex).addInEdge(id);
+        CPIVertexProxy oVP = (CPIVertexProxy) outVertex;
+        oVP.addOutEdge(id);
+        CPIVertexProxy iVP = (CPIVertexProxy) inVertex;
+        iVP.addInEdge(id);
 
-        CPIVertexProxy.CPIVertex oVImpl = mutableVertexImpl(outVertex.getId().toString());
-        CPIVertexProxy.CPIVertex iVImpl = mutableVertexImpl(inVertex.getId().toString());
+        CPIVertex oVImpl = mutableVertexImpl(outVertex.getId().toString());
+        CPIVertex iVImpl = mutableVertexImpl(inVertex.getId().toString());
 
-        manager.addEdge(impl, oVImpl, iVImpl, graphId);
-        manager.setProperty(impl, ID, id);
+        queueAction(manager.addEdge(graphId, id, oVP.rawId(), iVP.rawId(), label));
 
         return new CPIEdgeProxy(id, this);
     }
@@ -255,18 +278,18 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         checkNotNull(edge);
 
         CPIEdgeProxy ep = (CPIEdgeProxy) edge;
+        String id = ep.rawId();
 
         CPIVertexProxy vOut = ep.outVertex();
-        vOut.removeEdge(ep.rawId());
+        vOut.removeEdge(id);
 
         CPIVertexProxy vIn = ep.inVertex();
-        vIn.removeEdge(ep.rawId());
+        vIn.removeEdge(id);
 
-        mutatedEdges.remove(ep.rawId());
-        deletedEdges.add(ep.rawId());
+        mutatedEdges.remove(id);
+        deletedEdges.add(id);
 
-        CPIEdgeProxy.CPIEdge impl = mutableEdgeImpl(ep.rawId());
-        manager.removeEdge(impl);
+        queueAction(manager.removeEdge(graphId, id));
     }
 
     @Override
@@ -334,7 +357,9 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         vertexCache.putAll(mutatedVertices);
         edgeCache.putAll(mutatedEdges);
 
-        manager.commit();
+        queueAction(manager.commit());
+        // now fire them off
+        manager.queue(wbActions);
 
         // TODO: incremental indices
         reset();
@@ -346,8 +371,8 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     }
 
     // =======================================
-    CPIIndex<CPIVertexProxy.CPIVertex> vIndices = new CPIIndex<>();
-    CPIIndex<CPIEdgeProxy.CPIEdge> eIndices = new CPIIndex<>();
+    CPIIndex<CPIVertex> vIndices = new CPIIndex<>();
+    CPIIndex<CPIEdge> eIndices = new CPIIndex<>();
 
     @Override
     public <T extends Element> void createKeyIndex(String key, Class<T> elementClass, Parameter... indexParameters) {
@@ -402,18 +427,23 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 //        manager.commit();
     }
 
+    void queueAction(Runnable r) {
+        wbActions.add(r);
+    }
     // =======================================
     private final String graphId;
     final CPIGraphManager manager;
-    final Cache<String, CPIVertexProxy.CPIVertex> vertexCache = CacheBuilder.newBuilder()
+    final Cache<String, CPIVertex> vertexCache = CacheBuilder.newBuilder()
             .maximumSize(1000)
             .build();
-    final Cache<String, CPIEdgeProxy.CPIEdge> edgeCache = CacheBuilder.newBuilder()
+    final Cache<String, CPIEdge> edgeCache = CacheBuilder.newBuilder()
             .maximumSize(1000)
             .build();
 
-    Map<String, CPIVertexProxy.CPIVertex> mutatedVertices = newHashMap();
+    Map<String, CPIVertex> mutatedVertices = newHashMap();
     Set<String> deletedVertices = newHashSet();
-    Map<String, CPIEdgeProxy.CPIEdge> mutatedEdges = newHashMap();
+    Map<String, CPIEdge> mutatedEdges = newHashMap();
     Set<String> deletedEdges = newHashSet();
+
+    Queue<Runnable> wbActions = newArrayDeque();
 }
