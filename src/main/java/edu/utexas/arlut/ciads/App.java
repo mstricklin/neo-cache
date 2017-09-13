@@ -6,22 +6,43 @@ import com.tinkerpop.blueprints.impls.neo4j.Neo4jGraph;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraph;
 import edu.utexas.arlut.ciads.cpiGraph.CPIGraphManager;
 import edu.utexas.arlut.ciads.cpiGraph.CPIVertexProxy;
+import edu.utexas.arlut.ciads.cpiGraph.SoRBuilder;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
 import java.util.Map;
 
 import static com.tinkerpop.blueprints.util.ElementHelper.getProperties;
 
 @Slf4j
 public class App {
+    static class Neo4jBuilder implements SoRBuilder<Neo4jGraph> {
+        Neo4jBuilder(String baseDir) {
+            this.baseDir = baseDir;
+        }
+
+        @Override
+        public Neo4jGraph build(String dir) {
+            String path = baseDir + File.pathSeparatorChar + dir;
+            Neo4jGraph g = new Neo4jGraph(path);
+            g.createKeyIndex(CPIGraph.ID, Vertex.class);
+            g.createKeyIndex(CPIGraph.ID, Edge.class);
+            return g;
+        }
+
+        final String baseDir;
+    }
+
     public static void main(String[] args) throws InterruptedException {
+
 
         final Neo4jGraph n4jg = new Neo4jGraph("graph");
 
         log.info("Neo contents");
         dumpGraph(n4jg);
 
-        CPIGraphManager cpiManager = new CPIGraphManager(n4jg);
+        Neo4jBuilder builder = new Neo4jBuilder("graphs");
+        CPIGraphManager cpiManager = new CPIGraphManager(builder);
         CPIGraph cg = cpiManager.create("aaa");
         log.info("Graph {}", cg);
 
@@ -81,7 +102,6 @@ public class App {
 
 
 //        n4jg.shutdown();
-
     }
 
     private static void dumpProperties(Element e) {

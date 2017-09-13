@@ -139,7 +139,8 @@ public class CPITest {
         log.info("graph dir {}", graphDir);
         n4jg = new Neo4jGraph(graphDir.getPath());
 
-        cpiManager = new CPIGraphManager(n4jg);
+        App.Neo4jBuilder builder = new App.Neo4jBuilder("graphs");
+        cpiManager = new CPIGraphManager(builder);
         graph = cpiManager.create("aaa");
         log.info("Testing {}...", name.getMethodName());
         sw = Stopwatch.createStarted();

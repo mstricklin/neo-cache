@@ -59,11 +59,10 @@ public class CPIEdgeProxy extends CPIElementProxy implements Edge {
     }
 
     protected void _setProperty(String key, Object value) {
-        graph.queueAction(graph.manager.setEProperty(graph.getId(), id, key, value));
+        graph.persister.setEProperty(id, key, value);
     }
     @Override
-    protected void _rmProperty(String key) {
-        graph.queueAction(graph.manager.removeEProperty(graph.getId(), id, key));
+    protected void _rmProperty(String key) { graph.persister.removeEProperty(id, key);
     }
 
     @Override

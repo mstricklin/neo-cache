@@ -93,11 +93,11 @@ public class CPIVertexProxy extends CPIElementProxy implements Vertex {
     }
     @Override
     protected void _setProperty(String key, Object value) {
-        graph.queueAction(graph.manager.setVProperty(graph.getId(), id, key, value));
+        graph.persister.setVProperty(id, key, value);
     }
     @Override
     protected void _rmProperty(String key) {
-        graph.queueAction(graph.manager.removeVProperty(graph.getId(), id, key));
+        graph.persister.removeVProperty(id, key);
     }
 
     @Override

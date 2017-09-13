@@ -16,6 +16,8 @@ import java.util.Set;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.*;
 import com.tinkerpop.blueprints.*;
 import com.tinkerpop.blueprints.util.DefaultGraphQuery;
@@ -32,30 +34,31 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     public static final String ID = "__id";
     public static final String PARTITION = "__partition";
 
-    CPIGraph(String graphId, CPIGraphManager manager) {
+    CPIGraph(String graphId, CPIWriteBehind wb) {
         log.info("Init CPIGraph w/ id '{}'", graphId);
         this.graphId = graphId;
-        this.manager = manager;
+        this.persister = wb;
+//        this.manager = manager;
     }
-    CPIGraph(CPIGraph src, String graphId, CPIGraphManager manager) {
+    CPIGraph(CPIGraph src, String graphId, CPIWriteBehind wb) {
         // TODO: queue up W-B & commit
         log.info("Init CPIGraph from {} w/ id '{}'", src.graphId, graphId);
         this.graphId = graphId;
-        this.manager = manager;
+        this.persister = wb;
         for (Map.Entry<String, CPIVertex> ve: src.vertexCache.asMap().entrySet()) {
             CPIVertex impl = new CPIVertex(ve.getValue());
             vertexCache.put(ve.getKey(), impl);
-            manager.addVertex(graphId, impl.getId());
+            persister.addVertex(impl.getId());
             for (Map.Entry<String, Object> pe: impl.properties.entrySet()) {
-                manager.setVProperty(graphId, impl.getId(), pe.getKey(), pe.getValue());
+                persister.setVProperty(impl.getId(), pe.getKey(), pe.getValue());
             }
         }
         for (Map.Entry<String, CPIEdge> ve: src.edgeCache.asMap().entrySet()) {
             CPIEdge impl = new CPIEdge(ve.getValue());
             edgeCache.put(ve.getKey(), impl);
-            manager.addEdge(graphId, impl.getId(), impl.outVertexId, impl.inVertexId, impl.label);
+            persister.addEdge(impl.getId(), impl.outVertexId, impl.inVertexId, impl.label);
             for (Map.Entry<String, Object> pe: impl.properties.entrySet())
-                manager.setEProperty(graphId, impl.getId(), pe.getKey(), pe.getValue());
+                persister.setEProperty(impl.getId(), pe.getKey(), pe.getValue());
         }
     }
 
@@ -178,12 +181,12 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     // =================================
     @Override
     public Vertex addVertex(Object id_) {
-        String id = manager.vertexId(id_.toString());
+        String id = CPIGraphManager.vertexId(id_);
         CPIVertex impl = new CPIVertex(id);
         mutatedVertices.put(id, impl);
         impl.properties.put(ID, id);
 
-        queueAction(manager.addVertex(graphId, id));
+        persister.addVertex(id);
 
         return new CPIVertexProxy(id, this);
     }
@@ -192,7 +195,7 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     public Vertex getVertex(Object id) {
         if (null == id)
             throw com.tinkerpop.blueprints.util.ExceptionFactory.vertexIdCanNotBeNull();
-        if (deletedVertices.contains(id))
+        if (deletedVertices.contains(id.toString()))
             return null;
         if (mutatedVertices.containsKey(id.toString())
                 || (null != vertexCache.getIfPresent(id.toString())))
@@ -210,18 +213,19 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         mutatedVertices.remove(id);
         deletedVertices.add(id);
 
-        queueAction(manager.removeVertex(graphId, id));
+        persister.removeVertex(id);
     }
 
 
     @Override
     public Iterable<Vertex> getVertices() {
-        return FluentIterable.from(vertexCache.asMap().keySet())
+        Set<String> s = FluentIterable.from(vertexCache.asMap().keySet())
                 .append(mutatedVertices.keySet())
                 .filter(not(in(deletedVertices)))
+                .toSet();
+        return FluentIterable.from(s)
                 .transform(CPIVertexProxy.MAKE(this))
-                .transform(CPIVertexProxy.DOWNCAST)
-                .toList();
+                .transform(CPIVertexProxy.DOWNCAST);
     }
 
     @Override
@@ -240,7 +244,7 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // TODO: assert non-null & cast-ability
         if (label == null)
             throw edgeLabelCanNotBeNull();
-        String id = manager.edgeId(id_.toString());
+        String id = CPIGraphManager.edgeId(id_);
         CPIEdge impl = new CPIEdge(id,
                 outVertex.getId().toString(),
                 inVertex.getId().toString(),
@@ -256,7 +260,7 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         CPIVertex oVImpl = mutableVertexImpl(outVertex.getId().toString());
         CPIVertex iVImpl = mutableVertexImpl(inVertex.getId().toString());
 
-        queueAction(manager.addEdge(graphId, id, oVP.rawId(), iVP.rawId(), label));
+        persister.addEdge(id, oVP.rawId(), iVP.rawId(), label);
 
         return new CPIEdgeProxy(id, this);
     }
@@ -289,17 +293,18 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         mutatedEdges.remove(id);
         deletedEdges.add(id);
 
-        queueAction(manager.removeEdge(graphId, id));
+        persister.removeEdge(id);
     }
 
     @Override
     public Iterable<Edge> getEdges() {
-        return FluentIterable.from(edgeCache.asMap().keySet())
+        Set<String> s = FluentIterable.from(edgeCache.asMap().keySet())
                 .append(mutatedEdges.keySet())
                 .filter(not(in(deletedEdges)))
+                .toSet();
+        return FluentIterable.from(s)
                 .transform(CPIEdgeProxy.MAKE(this))
-                .transform(CPIEdgeProxy.DOWNCAST)
-                .toList();
+                .transform(CPIEdgeProxy.DOWNCAST);
     }
 
     @Override
@@ -340,34 +345,21 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 
     @Override
     public void commit() {
-        /*
-        Merge order:
-        1. remove edges
-        2. remove vertices
-        3. add vertices
-        4. add edges
-        5. remove properties (if element exists)
-        6. set properties (if element exists)
-        7. incremental indices? maybe auto-update on rm&set?
-        queue write-behind
-        */
         edgeCache.invalidateAll(deletedEdges);
         vertexCache.invalidateAll(deletedVertices);
 
         vertexCache.putAll(mutatedVertices);
         edgeCache.putAll(mutatedEdges);
+        // TODO: incremental indices?
 
-        queueAction(manager.commit());
-        // now fire them off
-        manager.queue(wbActions);
-
-        // TODO: incremental indices
         reset();
+        persister.commit();
     }
 
     @Override
     public void rollback() {
         reset();
+        persister.rollback();
     }
 
     // =======================================
@@ -427,17 +419,15 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
 //        manager.commit();
     }
 
-    void queueAction(Runnable r) {
-        wbActions.add(r);
-    }
     // =======================================
     private final String graphId;
-    final CPIGraphManager manager;
+    final CPIWriteBehind persister;
+
     final Cache<String, CPIVertex> vertexCache = CacheBuilder.newBuilder()
-            .maximumSize(1000)
+            .maximumSize(100000)
             .build();
     final Cache<String, CPIEdge> edgeCache = CacheBuilder.newBuilder()
-            .maximumSize(1000)
+            .maximumSize(100000)
             .build();
 
     Map<String, CPIVertex> mutatedVertices = newHashMap();
@@ -445,5 +435,4 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
     Map<String, CPIEdge> mutatedEdges = newHashMap();
     Set<String> deletedEdges = newHashSet();
 
-    Queue<Runnable> wbActions = newArrayDeque();
 }
