@@ -28,6 +28,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & TransactionalGraph> {
         CPIWriteBehind wb = new CPIWriteBehind(tg);
         CPIGraph g = new CPIGraph(graphId, wb);
         load(g);
+        graphs.put(graphId, g);
         return g;
     }
     public CPIGraph createFrom(CPIGraph src, String graphId) {
@@ -35,6 +36,7 @@ public class CPIGraphManager<T extends KeyIndexableGraph & TransactionalGraph> {
         // TODO: load?
         CPIWriteBehind wb = new CPIWriteBehind(tg);
         CPIGraph g = new CPIGraph(src, graphId, wb);
+        graphs.put(graphId, g);
         return g;
     }
 
@@ -46,8 +48,11 @@ public class CPIGraphManager<T extends KeyIndexableGraph & TransactionalGraph> {
     }
 
     public void shutdown() {
+        log.info("CPIManager shutdown");
         for (CPIGraph g : graphs.asMap().values())
             g.shutdown();
+        for (CPIGraph g : graphs.asMap().values())
+            g.waitShutdown();
     }
 
     public CPIGraph getGraph(final String graphId) {

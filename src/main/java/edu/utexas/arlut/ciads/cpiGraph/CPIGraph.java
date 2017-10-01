@@ -417,6 +417,12 @@ public class CPIGraph implements KeyIndexableGraph, TransactionalGraph {
         // 1. flush all write-behind
         // 2. tell manager to remove us
 //        manager.commit();
+        log.info("{} shutdown", this);
+        persister.shutdown();
+    }
+    void waitShutdown() {
+        log.info("waitShutdown");
+        persister.await();
     }
 
     // =======================================

@@ -23,7 +23,7 @@ public class App {
 
         @Override
         public Neo4jGraph build(String dir) {
-            String path = baseDir + File.pathSeparatorChar + dir;
+            String path = baseDir + '/' + dir;
             Neo4jGraph g = new Neo4jGraph(path);
             g.createKeyIndex(CPIGraph.ID, Vertex.class);
             g.createKeyIndex(CPIGraph.ID, Edge.class);
@@ -36,10 +36,10 @@ public class App {
     public static void main(String[] args) throws InterruptedException {
 
 
-        final Neo4jGraph n4jg = new Neo4jGraph("graph");
+//        final Neo4jGraph n4jg = new Neo4jGraph("graph");
 
-        log.info("Neo contents");
-        dumpGraph(n4jg);
+//        log.info("Neo contents");
+//        dumpGraph(n4jg);
 
         Neo4jBuilder builder = new Neo4jBuilder("graphs");
         CPIGraphManager cpiManager = new CPIGraphManager(builder);
@@ -47,6 +47,21 @@ public class App {
         log.info("Graph {}", cg);
 
         cg.createKeyIndex("foo", Vertex.class);
+
+        for (int i=0; i<5; i++) {
+            Vertex v = cg.addVertex(String.valueOf(i));
+//            v.setProperty("a", "AAA");
+//            v.setProperty("b", "BBB");
+//            v.removeProperty("a");
+        }
+        cg.commit();
+        for (int i=0; i<5; i++) {
+            Vertex v = cg.getVertex(String.valueOf(i));
+            v.setProperty("a", "AAA");
+            v.setProperty("b", "BBB");
+            v.removeProperty("a");
+        }
+        cg.commit();
 
 //        Vertex v0 = cg.getVertex("v0");
 //        log.info("Got v0: {}", v0);
@@ -67,11 +82,14 @@ public class App {
 //        Edge e0 = cg.addEdge("e0", v0, v1, "sam");
 //        e0.setProperty("foo", "e1");
 
+        Thread.sleep(500);
         log.info("= dump cpi =");
         dumpGraph(cg);
         Thread.sleep(500);
         log.info("= dump neo4j =");
-        dumpGraph(n4jg);
+//        dumpGraph(n4jg);
+//        cg.commit();
+        cpiManager.shutdown();
 
 
 //        cg.addEdge(null, v0, v1, "sam");
@@ -88,7 +106,6 @@ public class App {
 //        v0.setProperty("foo", "v0");
 //        log.info("commit contents");
 //
-        cg.commit();
 //        dumpGraph(cg);
 
 
@@ -98,7 +115,6 @@ public class App {
 //        dumpGraph(n4jg);
 
 //        cg.shutdown();
-        cpiManager.shutdown();
 
 
 //        n4jg.shutdown();
